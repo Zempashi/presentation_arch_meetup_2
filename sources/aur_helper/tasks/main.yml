@@ -1,0 +1,32 @@
+
+- git:
+    repo: https://aur.archlinux.org/{{package_name}}.git
+    dest: >
+      /tmp/{{ lookup('pipe',
+      'tr -dc A-Za-z0-9 < /dev/urandom | head -c${1:-8};echo;') }}
+  register: git_clone
+
+- shell: >
+    . ./PKGBUILD; echo "${makedepends[@]}"
+    | xargs pacman -Sy --asdeps --needed --noconfirm;
+    chmod 777 .
+  args:
+    chdir: '{{ git_clone.invocation.module_complex_args.dest}}'
+
+- command: makepkg
+  become: yes
+  become_user: nobody
+  args:
+    chdir: '{{ git_clone.invocation.module_complex_args.dest}}'
+
+- command: 'ls -1'
+  register: file_list
+  args:
+    chdir: '{{ git_clone.invocation.module_complex_args.dest}}'
+
+- command: >
+    pacman -U --noconfirm
+    {% for pkg in file_list.stdout_lines if pkg|match('.*pkg\.tar\.xz') %}
+       {{ pkg }} {% endfor %}
+  args:
+    chdir: '{{ git_clone.invocation.module_complex_args.dest}}'
